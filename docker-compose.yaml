@@ -1,0 +1,84 @@
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:25.3.7.194-alpine
+    volumes:
+      - ch-data:/var/lib/clickhouse
+      - .ch/config.xml:/etc/clickhouse-server/config.d/docker.xml
+    environment:
+      CLICKHOUSE_USER: root
+      CLICKHOUSE_PASSWORD: da-zoomcamp
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+      CLICKHOUSE_INIT_TIMEOUT: 60 # 1min
+      CLICKHOUSE_DB: sandbox
+    cap_add:
+      - SYS_NICE
+      - NET_ADMIN
+      - IPC_LOCK
+      - SYS_PTRACE
+    ports:
+      - "8123:8123" # HTTP port
+      - "9000:9000" # TCP port
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    depends_on:
+      createbuckets:
+        condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--user", "root", "--password", "da-zoomcamp", "-q", "SELECT 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "${MINIO_PORT:-9010}:9000"
+      - "${MINIO_CONSOLE_PORT:-9011}:9001"
+    environment:
+      MINIO_ROOT_USER: root
+      MINIO_REGION: eu-west-2
+      MINIO_ROOT_PASSWORD: da-zoomcamp
+      MINIO_DOMAIN: minio.local
+    volumes:
+      - minio_data:/data
+    command: ["server", "--console-address", ":9001", "/data"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      default:
+        aliases:
+          - minio.local
+          - da-zoomcamp.minio.local
+
+  createbuckets:
+    image: quay.io/minio/mc:RELEASE.2025-03-12T17-29-24Z
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: on-failure
+    entrypoint: >
+      /bin/sh -c "
+      sleep 5;
+      /usr/bin/mc alias set dockerminio http://minio.local:9000 root da-zoomcamp;
+      /usr/bin/mc mb dockerminio/da-zoomcamp
+      exit 0;
+      "
+
+
+volumes:
+  ch-data:
+    driver: local
+  minio_data:
+    driver: local
