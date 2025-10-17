@@ -1,0 +1,23 @@
+[project]
+name = "da-zoomcamp"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+  "dependency-injector>=4.48.1",
+  "dlt[clickhouse,duckdb,filesystem,parquet]>=1.14.1",
+  "httpx>=0.28.1",
+  "loguru>=0.7.3",
+  "orjson>=3.11.1",
+  "polars>=1.31.0",
+  "pydantic-extra-types[pendulum]>=2.10.5",
+  "pydantic-settings>=2.10.1",
+  "typer>=0.17.3",
+]
+
+[dependency-groups]
+dev = [
+    "loguru-mypy>=0.0.4",
+]
+development = ["ipykernel>=6.30.0", "ipython>=9.4.0", "jupytext>=1.17.2"]
