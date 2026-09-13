@@ -15,7 +15,7 @@ Granularity = Literal["daily", "weekly", "monthly"]
 WEEKEND_DAYS = {5, 6}  # workalendar weekdays: Monday(0) .. Sunday(6)
 DEFAULT_CALENDARS = ("US-NY",)
 DEFAULT_GRANULARITIES: tuple[Granularity, ...] = ("daily",)
-DEFAULT_BATCH_SIZE = 1024
+DEFAULT_CHUNK_SIZE = 1024
 
 
 def discover_granularities() -> dict[str, type[CalendarRecord]]:
@@ -123,24 +123,24 @@ EXTRACTORS = {
 
 @dlt.source(name="calendar", max_table_nesting=1)
 def factory(
+    calendars: Sequence[str] | None = None,
     *,
     period: pendulum.Interval[pendulum.Date],
-    calendars: Sequence[str] | None = None,
     granularities: Sequence[Granularity] | None = None,
-    batch_size: int = DEFAULT_BATCH_SIZE,
-    batch_sizes: Mapping[str, int] | None = None,
+    chunk_size: int = DEFAULT_CHUNK_SIZE,
+    chunk_sizes: Mapping[str, int] | None = None,
     write_disposition: Literal["append", "replace", "merge"] = "merge",
 ) -> Generator[DltResource]:
     """
     A source for calendar references (holidays, weekends, workdays), one or more calendars at a time.
     Args:
-        period (pendulum.Interval[pendulum.Date]): The time period for which to collect calendar data.
         calendars (Sequence[str]): ISO 3166-1/3166-2 region codes resolved through the workalendar registry
             (e.g. ``US``, ``US-NY``). Defaults to ``US-NY``.
+        period (pendulum.Interval[pendulum.Date]): The time period for which to collect calendar data.
         granularities (Sequence[Granularity]): Temporal grains to emit, each as its own table
             (``calendar_daily``, ``calendar_weekly``, ``calendar_monthly``). Defaults to ``daily``.
-        batch_size (int): Default Arrow record-batch size (rows) for every resource.
-        batch_sizes (Mapping[str, int]): Per-granularity overrides of ``batch_size``.
+        chunk_size (int): Default Arrow record-batch size (rows) for every resource.
+        chunk_sizes (Mapping[str, int]): Per-granularity overrides of ``chunk_size``.
         write_disposition (Literal["append", "replace", "merge"]): The write disposition for the source.
     Returns:
         Generator[SourceFactory, None, None]: A generator of source factories for the given period.
@@ -159,12 +159,12 @@ def factory(
     unknown = set(selected) - set(mapping)
     if unknown:
         raise ValueError(f"Unknown granularities: {sorted(unknown)}")
-    overrides = batch_sizes or {}
+    overrides = chunk_sizes or {}
 
     for granularity in selected:
         schema = mapping[granularity]
         extractor = EXTRACTORS[granularity]
-        size = overrides.get(granularity, batch_size)
+        size = overrides.get(granularity, chunk_size)
 
         def extract(extractor=extractor, size: int = size) -> Iterator[pa.RecordBatch]:
             rows: list[dict] = []

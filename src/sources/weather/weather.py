@@ -27,7 +27,7 @@ FLOAT_VARIABLES = tuple(v for v in HOURLY_VARIABLES if v != "is_day")
 
 NYC_POINT = (40.7128, -74.0060)
 DEFAULT_GRANULARITIES: tuple[Granularity, ...] = ("hourly",)
-DEFAULT_BATCH_SIZE = 24 * 14  # two weeks of hourly observations per batch
+DEFAULT_CHUNK_SIZE = 24 * 14  # two weeks of hourly observations per batch
 
 
 def discover_granularities() -> dict[str, type[WeatherRecord]]:
@@ -164,26 +164,26 @@ EXTRACTORS = {
 
 @dlt.source(name="weather", max_table_nesting=1)
 def factory(
+    points: Sequence[tuple[float, float]] | None = None,
     *,
     period: pendulum.Interval[pendulum.Date],
-    points: list[tuple[float, float]] | None = None,
     granularities: Sequence[Granularity] | None = None,
-    batch_size: int = DEFAULT_BATCH_SIZE,
-    batch_sizes: Mapping[str, int] | None = None,
     base_url: str = dlt.config.value,
+    chunk_size: int = DEFAULT_CHUNK_SIZE,
+    chunk_sizes: Mapping[str, int] | None = None,
     write_disposition: Literal["append", "replace", "merge"] = "merge",
 ) -> Generator[DltResource]:
     """
     A source for historical weather observations from the Open-Meteo archive API.
     Args:
-        period (pendulum.Interval[pendulum.Date]): The time period for which to collect weather data.
-        points (list[tuple[float, float]]): Geographic points (latitude, longitude) to collect weather for.
+        points (Sequence[tuple[float, float]]): Geographic points (latitude, longitude) to collect weather for.
             Defaults to a single point in New York City.
+        period (pendulum.Interval[pendulum.Date]): The time period for which to collect weather data.
         granularities (Sequence[Granularity]): Temporal grains to emit, each as its own table
             (``weather_hourly``, ``weather_daily``, ``weather_weekly``, ``weather_monthly``). Defaults to ``hourly``.
-        batch_size (int): Default Arrow record-batch size (rows) for every resource.
-        batch_sizes (Mapping[str, int]): Per-granularity overrides of ``batch_size``.
         base_url (str): The Open-Meteo archive API URL.
+        chunk_size (int): Default Arrow record-batch size (rows) for every resource.
+        chunk_sizes (Mapping[str, int]): Per-granularity overrides of ``chunk_size``.
         write_disposition (Literal["append", "replace", "merge"]): The write disposition for the source.
     Returns:
         Generator[SourceFactory, None, None]: A generator of source factories for the given period.
@@ -195,7 +195,7 @@ def factory(
     unknown = set(selected) - set(mapping)
     if unknown:
         raise ValueError(f"Unknown granularities: {sorted(unknown)}")
-    overrides = batch_sizes or {}
+    overrides = chunk_sizes or {}
 
     cache: dict[tuple[float, float], list[dict]] = {}
 
@@ -238,7 +238,7 @@ def factory(
     for granularity in selected:
         schema = mapping[granularity]
         extractor = EXTRACTORS[granularity]
-        size = overrides.get(granularity, batch_size)
+        size = overrides.get(granularity, chunk_size)
 
         def extract(extractor=extractor, size: int = size) -> Iterator[pa.RecordBatch]:
             rows: list[dict] = []
