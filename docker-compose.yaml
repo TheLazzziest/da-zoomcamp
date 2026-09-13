@@ -103,6 +103,7 @@ services:
       SOCRATA_APP_TOKEN: ${SOCRATA_APP_TOKEN:-}
     volumes:
       - ./dags:/opt/airflow/dags
+      - ./.dlt:/opt/airflow/.dlt:ro
       - airflow-home:/opt/airflow
     restart: unless-stopped
 
