@@ -1,4 +1,4 @@
-from collections.abc import Generator, Iterator, Sequence
+from collections.abc import Generator, Iterator, Mapping, Sequence
 from datetime import date as date_type
 from typing import Literal
 
@@ -15,7 +15,7 @@ Granularity = Literal["daily", "weekly", "monthly"]
 WEEKEND_DAYS = {5, 6}  # workalendar weekdays: Monday(0) .. Sunday(6)
 DEFAULT_CALENDARS = ("US-NY",)
 DEFAULT_GRANULARITIES: tuple[Granularity, ...] = ("daily",)
-BATCH_SIZE = 1024
+DEFAULT_BATCH_SIZE = 1024
 
 
 def discover_granularities() -> dict[str, type[CalendarRecord]]:
@@ -127,6 +127,8 @@ def factory(
     period: pendulum.Interval[pendulum.Date],
     calendars: Sequence[str] | None = None,
     granularities: Sequence[Granularity] | None = None,
+    batch_size: int = DEFAULT_BATCH_SIZE,
+    batch_sizes: Mapping[str, int] | None = None,
     write_disposition: Literal["append", "replace", "merge"] = "merge",
 ) -> Generator[DltResource]:
     """
@@ -137,6 +139,8 @@ def factory(
             (e.g. ``US``, ``US-NY``). Defaults to ``US-NY``.
         granularities (Sequence[Granularity]): Temporal grains to emit, each as its own table
             (``calendar_daily``, ``calendar_weekly``, ``calendar_monthly``). Defaults to ``daily``.
+        batch_size (int): Default Arrow record-batch size (rows) for every resource.
+        batch_sizes (Mapping[str, int]): Per-granularity overrides of ``batch_size``.
         write_disposition (Literal["append", "replace", "merge"]): The write disposition for the source.
     Returns:
         Generator[SourceFactory, None, None]: A generator of source factories for the given period.
@@ -155,19 +159,19 @@ def factory(
     unknown = set(selected) - set(mapping)
     if unknown:
         raise ValueError(f"Unknown granularities: {sorted(unknown)}")
+    overrides = batch_sizes or {}
 
     for granularity in selected:
         schema = mapping[granularity]
         extractor = EXTRACTORS[granularity]
+        size = overrides.get(granularity, batch_size)
 
-        def extract(
-            schema: type[CalendarRecord] = schema, extractor=extractor
-        ) -> Iterator[pa.RecordBatch]:
+        def extract(extractor=extractor, size: int = size) -> Iterator[pa.RecordBatch]:
             rows: list[dict] = []
             for code, calendar in resolved.items():
                 for row in extractor(code, calendar, period):
                     rows.append(row)
-                    if len(rows) >= BATCH_SIZE:
+                    if len(rows) >= size:
                         yield pa.RecordBatch.from_pylist(rows)
                         rows.clear()
             if rows:

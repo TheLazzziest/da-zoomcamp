@@ -1,4 +1,4 @@
-from collections.abc import Generator, Iterable, Iterator, Sequence
+from collections.abc import Generator, Iterable, Iterator, Mapping, Sequence
 from datetime import date as date_type
 from typing import Literal
 
@@ -27,7 +27,7 @@ FLOAT_VARIABLES = tuple(v for v in HOURLY_VARIABLES if v != "is_day")
 
 NYC_POINT = (40.7128, -74.0060)
 DEFAULT_GRANULARITIES: tuple[Granularity, ...] = ("hourly",)
-BATCH_SIZE = 24 * 14  # two weeks of hourly observations per batch
+DEFAULT_BATCH_SIZE = 24 * 14  # two weeks of hourly observations per batch
 
 
 def discover_granularities() -> dict[str, type[WeatherRecord]]:
@@ -168,6 +168,8 @@ def factory(
     period: pendulum.Interval[pendulum.Date],
     points: list[tuple[float, float]] | None = None,
     granularities: Sequence[Granularity] | None = None,
+    batch_size: int = DEFAULT_BATCH_SIZE,
+    batch_sizes: Mapping[str, int] | None = None,
     base_url: str = dlt.config.value,
     write_disposition: Literal["append", "replace", "merge"] = "merge",
 ) -> Generator[DltResource]:
@@ -179,6 +181,8 @@ def factory(
             Defaults to a single point in New York City.
         granularities (Sequence[Granularity]): Temporal grains to emit, each as its own table
             (``weather_hourly``, ``weather_daily``, ``weather_weekly``, ``weather_monthly``). Defaults to ``hourly``.
+        batch_size (int): Default Arrow record-batch size (rows) for every resource.
+        batch_sizes (Mapping[str, int]): Per-granularity overrides of ``batch_size``.
         base_url (str): The Open-Meteo archive API URL.
         write_disposition (Literal["append", "replace", "merge"]): The write disposition for the source.
     Returns:
@@ -191,6 +195,7 @@ def factory(
     unknown = set(selected) - set(mapping)
     if unknown:
         raise ValueError(f"Unknown granularities: {sorted(unknown)}")
+    overrides = batch_sizes or {}
 
     cache: dict[tuple[float, float], list[dict]] = {}
 
@@ -233,13 +238,14 @@ def factory(
     for granularity in selected:
         schema = mapping[granularity]
         extractor = EXTRACTORS[granularity]
+        size = overrides.get(granularity, batch_size)
 
-        def extract(extractor=extractor) -> Iterator[pa.RecordBatch]:
+        def extract(extractor=extractor, size: int = size) -> Iterator[pa.RecordBatch]:
             rows: list[dict] = []
             for point in points:
                 for row in extractor(observations(point)):
                     rows.append(row)
-                    if len(rows) >= BATCH_SIZE:
+                    if len(rows) >= size:
                         yield pa.RecordBatch.from_pylist(rows)
                         rows.clear()
             if rows:
