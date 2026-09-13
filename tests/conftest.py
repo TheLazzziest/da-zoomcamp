@@ -54,15 +54,16 @@ def dlt_profile(request):
         yield ctx
 
 
-@pytest.fixture
-def local_bucket(tmp_path, monkeypatch):
-    """Point the dlt filesystem destination at a throwaway local bucket."""
-    bucket = tmp_path / "bucket"
-    bucket.mkdir()
-    monkeypatch.setenv("DESTINATION__FILESYSTEM__BUCKET_URL", f"file://{bucket}")
-    monkeypatch.setenv("DLT_DATA_DIR", str(tmp_path / ".dlt"))
-    monkeypatch.setenv("RUNTIME__DLTHUB_TELEMETRY", "false")
-    return bucket
+@pytest.fixture(scope="session")
+def local_bucket(tmp_path_factory):
+    """Configure the dlt filesystem destination once per session (throwaway bucket)."""
+    bucket = tmp_path_factory.mktemp("bucket")
+    env = pytest.MonkeyPatch()
+    env.setenv("DESTINATION__FILESYSTEM__BUCKET_URL", f"file://{bucket}")
+    env.setenv("DLT_DATA_DIR", str(tmp_path_factory.mktemp("dlt")))
+    env.setenv("RUNTIME__DLTHUB_TELEMETRY", "false")
+    yield bucket
+    env.undo()
 
 
 @pytest.fixture(scope="module")
