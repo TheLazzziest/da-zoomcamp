@@ -1,0 +1,8 @@
+FROM apache/airflow:3.3.1-python3.13
+
+# Install the project (dlt sources + pipelines) as a library into the image,
+# so DAGs can `from dlt_sources import pipelines`. Version comes from git (hatch-vcs).
+USER airflow
+COPY --chown=airflow:root pyproject.toml README.md /tmp/build/
+COPY --chown=airflow:root dlt_sources /tmp/build/dlt_sources
+RUN pip install --no-cache-dir /tmp/build && rm -rf /tmp/build
