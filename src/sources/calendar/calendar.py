@@ -1,4 +1,4 @@
-from collections.abc import Generator, Iterator, Mapping, Sequence
+from collections.abc import Generator, Iterator, Sequence
 from datetime import date as date_type
 from typing import Literal
 
@@ -128,7 +128,6 @@ def factory(
     period: pendulum.Interval[pendulum.Date],
     granularities: Sequence[Granularity] | None = None,
     chunk_size: int = DEFAULT_CHUNK_SIZE,
-    chunk_sizes: Mapping[str, int] | None = None,
     write_disposition: Literal["append", "replace", "merge"] = "merge",
 ) -> Generator[DltResource]:
     """
@@ -139,8 +138,7 @@ def factory(
         period (pendulum.Interval[pendulum.Date]): The time period for which to collect calendar data.
         granularities (Sequence[Granularity]): Temporal grains to emit, each as its own table
             (``calendar_daily``, ``calendar_weekly``, ``calendar_monthly``). Defaults to ``daily``.
-        chunk_size (int): Default Arrow record-batch size (rows) for every resource.
-        chunk_sizes (Mapping[str, int]): Per-granularity overrides of ``chunk_size``.
+        chunk_size (int): Arrow record-batch size (rows) for every resource.
         write_disposition (Literal["append", "replace", "merge"]): The write disposition for the source.
     Returns:
         Generator[SourceFactory, None, None]: A generator of source factories for the given period.
@@ -159,14 +157,14 @@ def factory(
     unknown = set(selected) - set(mapping)
     if unknown:
         raise ValueError(f"Unknown granularities: {sorted(unknown)}")
-    overrides = chunk_sizes or {}
 
     for granularity in selected:
         schema = mapping[granularity]
         extractor = EXTRACTORS[granularity]
-        size = overrides.get(granularity, chunk_size)
 
-        def extract(extractor=extractor, size: int = size) -> Iterator[pa.RecordBatch]:
+        def extract(
+            extractor=extractor, size: int = chunk_size
+        ) -> Iterator[pa.RecordBatch]:
             rows: list[dict] = []
             for code, calendar in resolved.items():
                 for row in extractor(code, calendar, period):
@@ -184,5 +182,4 @@ def factory(
             primary_key=schema.primary_key(),
             columns=schema,
             write_disposition=write_disposition,
-            file_format="parquet",
         )

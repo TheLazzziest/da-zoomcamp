@@ -1,4 +1,4 @@
-from collections.abc import Generator, Iterable, Iterator, Mapping, Sequence
+from collections.abc import Generator, Iterable, Iterator, Sequence
 from datetime import date as date_type
 from typing import Literal
 
@@ -170,7 +170,6 @@ def factory(
     granularities: Sequence[Granularity] | None = None,
     base_url: str = dlt.config.value,
     chunk_size: int = DEFAULT_CHUNK_SIZE,
-    chunk_sizes: Mapping[str, int] | None = None,
     write_disposition: Literal["append", "replace", "merge"] = "merge",
 ) -> Generator[DltResource]:
     """
@@ -182,8 +181,7 @@ def factory(
         granularities (Sequence[Granularity]): Temporal grains to emit, each as its own table
             (``weather_hourly``, ``weather_daily``, ``weather_weekly``, ``weather_monthly``). Defaults to ``hourly``.
         base_url (str): The Open-Meteo archive API URL.
-        chunk_size (int): Default Arrow record-batch size (rows) for every resource.
-        chunk_sizes (Mapping[str, int]): Per-granularity overrides of ``chunk_size``.
+        chunk_size (int): Arrow record-batch size (rows) for every resource.
         write_disposition (Literal["append", "replace", "merge"]): The write disposition for the source.
     Returns:
         Generator[SourceFactory, None, None]: A generator of source factories for the given period.
@@ -195,7 +193,6 @@ def factory(
     unknown = set(selected) - set(mapping)
     if unknown:
         raise ValueError(f"Unknown granularities: {sorted(unknown)}")
-    overrides = chunk_sizes or {}
 
     cache: dict[tuple[float, float], list[dict]] = {}
 
@@ -238,9 +235,10 @@ def factory(
     for granularity in selected:
         schema = mapping[granularity]
         extractor = EXTRACTORS[granularity]
-        size = overrides.get(granularity, chunk_size)
 
-        def extract(extractor=extractor, size: int = size) -> Iterator[pa.RecordBatch]:
+        def extract(
+            extractor=extractor, size: int = chunk_size
+        ) -> Iterator[pa.RecordBatch]:
             rows: list[dict] = []
             for point in points:
                 for row in extractor(observations(point)):
@@ -258,5 +256,4 @@ def factory(
             primary_key=schema.primary_key(),
             columns=schema,
             write_disposition=write_disposition,
-            file_format="parquet",
         )
