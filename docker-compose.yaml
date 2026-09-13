@@ -69,10 +69,13 @@ services:
   airflow:
     build:
       context: .
-      dockerfile: Dockerfile.airflow
+      dockerfile: Dockerfile
+      args:
+        BASE_IMAGE: apache/airflow:3.3.1-python3.13
+        RUN_USER: airflow
     image: da-zoomcamp-airflow:local
     profiles: ["airflow"]
-    # Airflow 3 defaults to the Simple auth manager, which ignores _AIRFLOW_WWW_USER_*.
+    # Airflow 3 defaults to the Simple auth manager, which ignores _AIRFLOW_WWW_USER_* envs.
     # Seed a passwords file from the compose env so the UI login is deterministic.
     command:
       - bash
