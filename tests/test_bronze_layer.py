@@ -1,11 +1,21 @@
 import httpx
 import pendulum
+import pytest
+from airflow.dag_processing.dagbag import DagBag
 
 from dlt_sources import pipelines
 from dlt_sources.core.containers import Container
 from dlt_sources.core.enums import Destination
 
 PERIOD = pendulum.interval(pendulum.parse("2024-01-01"), pendulum.parse("2024-01-04"))
+
+DAG_IDS = [
+    "ingest_zones",
+    "ingest_calendar",
+    "ingest_weather",
+    "ingest_nyc311",
+    "ingest_nyc",
+]
 
 ZONE_CSV = (
     '"LocationID","Borough","Zone","service_zone"\n'
@@ -60,6 +70,12 @@ def patch_client(monkeypatch, module_path: str, handler) -> None:
 
 def _loaded(bucket) -> list:
     return list(bucket.rglob("*.metadata.json"))
+
+
+@pytest.mark.parametrize("dag_id", DAG_IDS)
+def test_dag_loads_without_import_errors(dagbag: DagBag, dag_id: str):
+    assert dagbag.import_errors == {}
+    assert dag_id in dagbag.dag_ids
 
 
 def test_run_calendar_e2e(local_bucket):

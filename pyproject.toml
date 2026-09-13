@@ -48,6 +48,7 @@ packages = ["dlt_sources"]
 
 [tool.pytest.ini_options]
 pythonpath = ["dags"]
+markers = ["integration: requires Docker (e.g. RustFS/S3); run with --run-integration"]
 
 [tool.ruff]
 lint.select = ["E", "F", "I", "UP", "B", "SIM"]
