@@ -1,0 +1,57 @@
+# See https://prek.j178.dev for more information.
+# yaml-language-server: $schema=https://www.schemastore.org/prek.json
+repos:
+  # --- Rust/format/lint/type sanity (commit stage) ---
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.7
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.13.0
+    hooks:
+      - id: mypy
+        name: mypy
+        language: system
+        entry: .venv/bin/mypy
+        require_serial: true
+        pass_filenames: false
+        args: [--config-file, pyproject.toml, src/]
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+
+  # --- Secrets guard: never let .dlt/secrets.toml or API keys reach a commit ---
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.1
+    hooks:
+      - id: gitleaks
+
+  - repo: local
+    hooks:
+      - id: commitizen
+        name: commitizen
+        entry: cz check --commit-msg-file
+        language: system
+        verbose: true
+        stages: [commit-msg]
+
+  # --- Test gate: fast subset, only before push ---
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: uv run python -m pytest
+        language: system
+        pass_filenames: false
+        always_run: true
+        verbose: true
+        stages: [pre-push]
