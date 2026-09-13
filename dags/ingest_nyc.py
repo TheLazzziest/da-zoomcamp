@@ -14,6 +14,7 @@ from dlt_sources.sources.nyc.enums import NYCTripCategory
     start_date=START_DATE,
     catchup=False,
     max_active_runs=1,
+    max_active_tasks=1,
     default_args=DEFAULT_ARGS,
     tags=["bronze", "nyc"],
 )

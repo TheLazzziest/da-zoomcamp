@@ -19,9 +19,7 @@ START_DATE = pendulum.datetime(2024, 1, 1, tz="UTC")
 
 def get_destination() -> Destination:
     """Destination for every bronze load, overridable via the ``destination`` Airflow Variable."""
-    return Destination(
-        Variable.get("destination", default_var=Destination.DUCKDB.value)
-    )
+    return Destination(Variable.get("destination", default=Destination.DUCKDB.value))
 
 
 def current_period() -> pendulum.Interval:
