@@ -100,7 +100,6 @@ def factory(
                 primary_key=primary_key,
                 columns=schema,
                 write_disposition=write_disposition,
-                file_format="parquet",
             )
             yield resource
         except httpx.HTTPError as e:
