@@ -5,6 +5,7 @@ import typer
 from loguru import logger
 
 from dlt_sources import pipelines
+from dlt_sources.core.containers import Container
 from dlt_sources.core.enums import Destination
 from dlt_sources.core.loguru import configure
 from dlt_sources.core.settings import get_settings
@@ -60,6 +61,7 @@ def run_nyc(
     pipelines.run_nyc(
         categories,
         period,
+        container=ctx.obj["container"],
         destination=ctx.obj["destination"],
         pipeline_name=ctx.obj.get("pipeline_name") or "nyc_trip_data_ingestion",
         dataset_name=ctx.obj.get("dataset_name") or "nyc",
@@ -108,6 +110,7 @@ def run_weather(
 
     pipelines.run_weather(
         period,
+        container=ctx.obj["container"],
         granularities=granularity,
         destination=ctx.obj["destination"],
         pipeline_name=ctx.obj.get("pipeline_name") or "weather_ingestion",
@@ -146,6 +149,7 @@ def run_nyc311(
 
     pipelines.run_nyc311(
         period,
+        container=ctx.obj["container"],
         destination=ctx.obj["destination"],
         pipeline_name=ctx.obj.get("pipeline_name") or "nyc311_ingestion",
         dataset_name=ctx.obj.get("dataset_name") or "nyc311",
@@ -163,6 +167,7 @@ def run_zones(ctx: typer.Context):
     logger.info("Running TLC taxi zone lookup pipeline")
 
     pipelines.run_zones(
+        container=ctx.obj["container"],
         destination=ctx.obj["destination"],
         pipeline_name=ctx.obj.get("pipeline_name") or "tlc_lookup_ingestion",
         dataset_name=ctx.obj.get("dataset_name") or "tlc_lookup",
@@ -218,6 +223,7 @@ def run_calendar(
 
     pipelines.run_calendar(
         period,
+        container=ctx.obj["container"],
         calendars=calendar,
         granularities=granularity,
         destination=ctx.obj["destination"],
@@ -257,6 +263,7 @@ def main(
         configure(settings)
 
     ctx.ensure_object(dict)
+    ctx.obj["container"] = Container()
     ctx.obj["debug"] = debug
     ctx.obj["destination"] = destination
     ctx.obj["pipeline_name"] = pipeline_name

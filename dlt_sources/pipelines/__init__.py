@@ -55,6 +55,7 @@ def run_nyc(
     categories: Sequence[NYCTripCategory],
     period: pendulum.Interval,
     *,
+    container: Container,
     destination: Destination = Destination.DUCKDB,
     pipeline_name: str = "nyc_trip_data_ingestion",
     dataset_name: str = "nyc",
@@ -63,7 +64,6 @@ def run_nyc(
     max_items: int | None = None,
 ) -> LoadInfo:
     """Run the NYC taxi trips pipeline."""
-    container = Container()
     source = container.nyc_source(categories=categories, period=period)
     return ingest(
         source,
@@ -79,6 +79,7 @@ def run_nyc(
 def run_weather(
     period: pendulum.Interval,
     *,
+    container: Container,
     granularities: Sequence[str] | None = None,
     destination: Destination = Destination.DUCKDB,
     pipeline_name: str = "weather_ingestion",
@@ -87,7 +88,6 @@ def run_weather(
     max_items: int | None = None,
 ) -> LoadInfo:
     """Run the Open-Meteo weather pipeline."""
-    container = Container()
     source = container.weather_source(
         period=period,
         granularities=cast(Sequence[WeatherGranularity] | None, granularities),
@@ -105,6 +105,7 @@ def run_weather(
 def run_calendar(
     period: pendulum.Interval,
     *,
+    container: Container,
     calendars: Sequence[str] | None = None,
     granularities: Sequence[str] | None = None,
     destination: Destination = Destination.DUCKDB,
@@ -114,7 +115,6 @@ def run_calendar(
     max_items: int | None = None,
 ) -> LoadInfo:
     """Run the workalendar calendar reference pipeline."""
-    container = Container()
     source = container.calendar_source(
         period=period,
         calendars=calendars,
@@ -133,6 +133,7 @@ def run_calendar(
 def run_nyc311(
     period: pendulum.Interval,
     *,
+    container: Container,
     destination: Destination = Destination.DUCKDB,
     pipeline_name: str = "nyc311_ingestion",
     dataset_name: str = "nyc311",
@@ -140,7 +141,6 @@ def run_nyc311(
     max_items: int | None = None,
 ) -> LoadInfo:
     """Run the NYC 311 service requests pipeline."""
-    container = Container()
     source = container.nyc311_source(period=period)
     return ingest(
         source,
@@ -154,6 +154,7 @@ def run_nyc311(
 
 def run_zones(
     *,
+    container: Container,
     destination: Destination = Destination.DUCKDB,
     pipeline_name: str = "tlc_lookup_ingestion",
     dataset_name: str = "tlc_lookup",
@@ -161,7 +162,6 @@ def run_zones(
     max_items: int | None = None,
 ) -> LoadInfo:
     """Run the TLC taxi zone lookup pipeline."""
-    container = Container()
     source = container.tlc_lookup_source()
     return ingest(
         source,
