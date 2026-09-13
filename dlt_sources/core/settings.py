@@ -1,3 +1,4 @@
+from functools import lru_cache
 from logging import INFO, _levelToName, getLevelName
 from typing import Annotated
 
@@ -18,12 +19,21 @@ class LoggingSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="logging")
 
 
+class HTTPSettings(BaseSettings):
+    timeout: float = Field(
+        default=60.0, description="Default timeout (seconds) for HTTP requests"
+    )
+
+    model_config = SettingsConfigDict(env_prefix="http")
+
+
 class ProjectSettings(BaseSettings):
     environment: str = Field(
         default="production", description="A environment which the project is run"
     )
 
     logging: LoggingSettings = LoggingSettings()
+    http: HTTPSettings = HTTPSettings()
 
     model_config = SettingsConfigDict(
         env_prefix="da_",
@@ -38,3 +48,9 @@ class ProjectSettings(BaseSettings):
     def is_production(self) -> bool:
         """A property to check if the environment is production."""
         return self.environment == "production"
+
+
+@lru_cache(maxsize=1)
+def get_settings() -> ProjectSettings:
+    """Return the process-wide settings dependency (single cached instance)."""
+    return ProjectSettings()

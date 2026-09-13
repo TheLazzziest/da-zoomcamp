@@ -11,6 +11,9 @@ import pendulum
 from dlt.sources import DltResource
 from loguru import logger
 
+from dlt_sources.core.http import build_client
+from dlt_sources.core.settings import get_settings
+
 from .enums import NYCTripCategory
 from .schemas import NYCRecordSchema
 
@@ -63,7 +66,7 @@ def factory(
         for batch in relation.fetch_arrow_reader(batch_size=batch_size):
             yield batch
 
-    with httpx.Client(base_url=base_url) as client:
+    with build_client(base_url=base_url, timeout=get_settings().http.timeout) as client:
         tasks: list[httpx.Request] = []
 
         for category, current_date in itertools.product(

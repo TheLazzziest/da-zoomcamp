@@ -12,12 +12,12 @@
     ```
 3. Explore the current pipelines:
     ```bash
-    dlt pipeline --list-pipelines src/pipelines 
+    dlt pipeline --list-pipelines dlt_sources/pipelines
     ```
 4. Run the NYC taxi trip data ingestion pipeline:
    ```bash
-    python -m src.main --destination duckdb run nyc yellow green --start-datetime 2023-01-01 --end-datetime 2023-03-01
-   ``` 
+    python -m dlt_sources.main --destination duckdb run nyc yellow green --start-datetime 2023-01-01 --end-datetime 2023-03-01
+   ```
 
 ## Resources
 

@@ -1,0 +1,71 @@
+import os
+import tempfile
+from pathlib import Path
+
+import pytest
+
+# Must be set before Airflow's config is first loaded (imports below).
+os.environ.setdefault("AIRFLOW_HOME", tempfile.mkdtemp(prefix="airflow-tests-"))
+
+from airflow.dag_processing.dagbag import DagBag  # noqa: E402
+from airflow.utils.db import initdb  # noqa: E402
+
+DAGS_DIR = Path(__file__).resolve().parent.parent / "dags"
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--run-integration",
+        action="store_true",
+        default=False,
+        help="run integration tests (requires Docker, e.g. RustFS/S3)",
+    )
+    parser.addoption(
+        "--dlt-profile",
+        action="store",
+        default=None,
+        help="dlt run-context profile to activate for the test session",
+    )
+
+
+def pytest_collection_modifyitems(config, items):
+    if config.getoption("--run-integration"):
+        return
+    skip = pytest.mark.skip(reason="requires --run-integration")
+    for item in items:
+        if "integration" in item.keywords:
+            item.add_marker(skip)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def airflow_db():
+    """Initialize the Airflow metadata database once per test session."""
+    initdb()
+    yield
+
+
+@pytest.fixture(scope="session", autouse=True)
+def dlt_profile(request):
+    """Activate the dlt run-context profile requested via ``--dlt-profile`` (may be None)."""
+    from dlt.common.runtime.run_context import switch_context, switched_run_context
+
+    profile = request.config.getoption("--dlt-profile")
+    with switched_run_context(switch_context(run_dir=None, profile=profile)) as ctx:
+        yield ctx
+
+
+@pytest.fixture(scope="session")
+def local_bucket(tmp_path_factory):
+    """Configure the dlt filesystem destination once per session (throwaway bucket)."""
+    bucket = tmp_path_factory.mktemp("bucket")
+    env = pytest.MonkeyPatch()
+    env.setenv("DESTINATION__FILESYSTEM__BUCKET_URL", f"file://{bucket}")
+    env.setenv("DLT_DATA_DIR", str(tmp_path_factory.mktemp("dlt")))
+    env.setenv("RUNTIME__DLTHUB_TELEMETRY", "false")
+    yield bucket
+    env.undo()
+
+
+@pytest.fixture(scope="module")
+def dagbag() -> DagBag:
+    return DagBag(dag_folder=str(DAGS_DIR))

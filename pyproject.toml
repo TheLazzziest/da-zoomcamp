@@ -1,31 +1,56 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
 [project]
 name = "da-zoomcamp"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
   "dependency-injector>=4.48.1",
   "dlt[clickhouse,duckdb,filesystem,parquet,pyiceberg]>=1.15",
-  "httpx>=0.28.1",
+  "httpx[http2]>=0.28.1",
   "loguru>=0.7.3",
   "orjson>=3.11.1",
   "polars>=1.31.0",
   "pydantic-extra-types[pendulum]>=2.10.5",
   "pydantic-settings>=2.10.1",
   "pyiceberg[fsspec,pyarrow,sql-sqlite]>=0.9.1",
+  "pyreqwest>=0.13",
   "sqlalchemy>=2.0.18",
   "typer>=0.19",
   "workalendar>=17.0",
+  "zstandard>=0.18",
 ]
+
+[project.scripts]
+da-zoomcamp = "dlt_sources.main:app"
 
 [dependency-groups]
 dev = [
     "mypy>=1.13.0",
     "ruff>=0.16.7",
     "pytest>=8.3.0",
+    "apache-airflow==3.3.1",
+    "testcontainers>=4.15.0",
+    "boto3>=1.39.11",
 ]
 development = ["ipykernel>=6.30.0", "ipython>=9.4.0", "jupytext>=1.17.2"]
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+fallback_version = "0.1.0"
+
+[tool.hatch.build.targets.wheel]
+packages = ["dlt_sources"]
+
+[tool.pytest.ini_options]
+pythonpath = ["dags"]
+markers = ["integration: requires Docker (e.g. RustFS/S3); run with --run-integration"]
 
 [tool.ruff]
 lint.select = ["E", "F", "I", "UP", "B", "SIM"]
@@ -33,12 +58,11 @@ lint.ignore = ["E501"]
 target-version = "py313"
 
 [tool.ruff.lint.isort]
-known-first-party = ["src"]
+known-first-party = ["dlt_sources"]
 
 [tool.commitizen]
 name = "cz_conventional_commits"
 version = "0.1.0"
-version_files = ["pyproject.toml:version"]
 tag_format = "v$version"
 # allowed types (conventional-commits subset this repo uses)
 types = [

@@ -1,58 +1,20 @@
 from typing import Annotated
 
-import dlt
 import pendulum
 import typer
-from dlt.sources import DltSource
 from loguru import logger
 
-from src.core.containers import Container
-from src.core.enums import Destination
-from src.core.loguru import configure
-from src.core.settings import ProjectSettings
-from src.sources.nyc.enums import NYCTripCategory
-from src.transformers.clickhouse import TableEngine, adapt_clickhouse
-from src.transformers.gcs import adapt_gcs
+from dlt_sources import pipelines
+from dlt_sources.core.containers import Container
+from dlt_sources.core.enums import Destination
+from dlt_sources.core.loguru import configure
+from dlt_sources.core.settings import get_settings
+from dlt_sources.sources.nyc.enums import NYCTripCategory
+from dlt_sources.transformers.clickhouse import TableEngine
 
 run_pipeline_app = typer.Typer(
     name="run", help="Run a pipeline for a specific data source."
 )
-
-
-def _adapt(source: DltSource, ctx: typer.Context) -> DltSource:
-    """Apply the destination-specific transformations to ``source``."""
-    destination = ctx.obj["destination"]
-    if destination is Destination.S3:
-        return adapt_gcs(source, table_format="iceberg")
-    if destination is Destination.CH:
-        return adapt_gcs(source)
-    return source
-
-
-def _run(
-    source: DltSource,
-    ctx: typer.Context,
-    *,
-    pipeline_name: str,
-    dataset_name: str,
-    table_engine: TableEngine | None = None,
-) -> None:
-    """Adapt ``source`` and load it into the configured destination."""
-    if table_engine and ctx.obj["destination"] is Destination.CH:
-        source = adapt_clickhouse(source, table_engine=table_engine)
-
-    if max_items := ctx.obj.get("max_items", None):
-        source = source.add_limit(max_items=max_items)
-
-    pipeline = dlt.pipeline(
-        pipeline_name=ctx.obj.get("pipeline_name") or pipeline_name,
-        destination=ctx.obj["destination"].value,
-        staging=("filesystem" if ctx.obj["destination"] is Destination.CH else None),
-        dataset_name=ctx.obj.get("dataset_name") or dataset_name,
-        dev_mode=ctx.obj.get("debug", False),
-    )
-    load_info = pipeline.run(source)
-    logger.info(load_info)
 
 
 @run_pipeline_app.command(
@@ -89,8 +51,6 @@ def run_nyc(
     ] = None,
 ):
     """Runs the NYC taxi trip data ingestion pipeline."""
-    container: Container = ctx.obj["container"]
-
     end_datetime = end_datetime or pendulum.now(tz=pendulum.UTC).start_of("month")
     period = pendulum.interval(start_datetime, end_datetime)
 
@@ -98,13 +58,16 @@ def run_nyc(
         f"Running NYC pipeline for {period} and categories: {[c.value for c in categories]}"
     )
 
-    source = container.nyc_source(categories=categories, period=period)
-    _run(
-        _adapt(source, ctx),
-        ctx,
-        pipeline_name="nyc_trip_data_ingestion",
-        dataset_name="nyc",
+    pipelines.run_nyc(
+        categories,
+        period,
+        container=ctx.obj["container"],
+        destination=ctx.obj["destination"],
+        pipeline_name=ctx.obj.get("pipeline_name") or "nyc_trip_data_ingestion",
+        dataset_name=ctx.obj.get("dataset_name") or "nyc",
         table_engine=table_engine,
+        dev_mode=ctx.obj.get("debug", False),
+        max_items=ctx.obj.get("max_items"),
     )
 
 
@@ -138,8 +101,6 @@ def run_weather(
     ] = None,
 ):
     """Runs the weather observations ingestion pipeline."""
-    container: Container = ctx.obj["container"]
-
     end_datetime = end_datetime or pendulum.now(tz=pendulum.UTC).start_of("month")
     period = pendulum.interval(start_datetime, end_datetime)
 
@@ -147,12 +108,15 @@ def run_weather(
         f"Running weather pipeline for {period} and granularities: {granularity}"
     )
 
-    source = container.weather_source(period=period, granularities=granularity)
-    _run(
-        _adapt(source, ctx),
-        ctx,
-        pipeline_name="weather_ingestion",
-        dataset_name="weather",
+    pipelines.run_weather(
+        period,
+        container=ctx.obj["container"],
+        granularities=granularity,
+        destination=ctx.obj["destination"],
+        pipeline_name=ctx.obj.get("pipeline_name") or "weather_ingestion",
+        dataset_name=ctx.obj.get("dataset_name") or "weather",
+        dev_mode=ctx.obj.get("debug", False),
+        max_items=ctx.obj.get("max_items"),
     )
 
 
@@ -178,19 +142,19 @@ def run_nyc311(
     ] = None,
 ):
     """Runs the NYC 311 service requests ingestion pipeline."""
-    container: Container = ctx.obj["container"]
-
     end_datetime = end_datetime or pendulum.now(tz=pendulum.UTC).start_of("month")
     period = pendulum.interval(start_datetime, end_datetime)
 
     logger.info(f"Running NYC 311 pipeline for {period}")
 
-    source = container.nyc311_source(period=period)
-    _run(
-        _adapt(source, ctx),
-        ctx,
-        pipeline_name="nyc311_ingestion",
-        dataset_name="nyc311",
+    pipelines.run_nyc311(
+        period,
+        container=ctx.obj["container"],
+        destination=ctx.obj["destination"],
+        pipeline_name=ctx.obj.get("pipeline_name") or "nyc311_ingestion",
+        dataset_name=ctx.obj.get("dataset_name") or "nyc311",
+        dev_mode=ctx.obj.get("debug", False),
+        max_items=ctx.obj.get("max_items"),
     )
 
 
@@ -200,16 +164,15 @@ def run_nyc311(
 )
 def run_zones(ctx: typer.Context):
     """Runs the TLC taxi zone lookup ingestion pipeline."""
-    container: Container = ctx.obj["container"]
-
     logger.info("Running TLC taxi zone lookup pipeline")
 
-    source = container.tlc_lookup_source()
-    _run(
-        _adapt(source, ctx),
-        ctx,
-        pipeline_name="tlc_lookup_ingestion",
-        dataset_name="tlc_lookup",
+    pipelines.run_zones(
+        container=ctx.obj["container"],
+        destination=ctx.obj["destination"],
+        pipeline_name=ctx.obj.get("pipeline_name") or "tlc_lookup_ingestion",
+        dataset_name=ctx.obj.get("dataset_name") or "tlc_lookup",
+        dev_mode=ctx.obj.get("debug", False),
+        max_items=ctx.obj.get("max_items"),
     )
 
 
@@ -251,8 +214,6 @@ def run_calendar(
     ] = None,
 ):
     """Runs the calendar reference ingestion pipeline."""
-    container: Container = ctx.obj["container"]
-
     end_datetime = end_datetime or pendulum.now(tz=pendulum.UTC).start_of("month")
     period = pendulum.interval(start_datetime, end_datetime)
 
@@ -260,14 +221,16 @@ def run_calendar(
         f"Running calendar pipeline for {period}, calendars: {calendar}, granularities: {granularity}"
     )
 
-    source = container.calendar_source(
-        period=period, calendars=calendar, granularities=granularity
-    )
-    _run(
-        _adapt(source, ctx),
-        ctx,
-        pipeline_name="calendar_ingestion",
-        dataset_name="calendar",
+    pipelines.run_calendar(
+        period,
+        container=ctx.obj["container"],
+        calendars=calendar,
+        granularities=granularity,
+        destination=ctx.obj["destination"],
+        pipeline_name=ctx.obj.get("pipeline_name") or "calendar_ingestion",
+        dataset_name=ctx.obj.get("dataset_name") or "calendar",
+        dev_mode=ctx.obj.get("debug", False),
+        max_items=ctx.obj.get("max_items"),
     )
 
 
@@ -295,15 +258,12 @@ def main(
         int | None, typer.Option(help="Limit the number of items to process.")
     ] = None,
 ):
-    settings = ProjectSettings()
+    settings = get_settings()
     if settings.is_production:
         configure(settings)
 
-    container = Container()
-    container.config.from_pydantic(settings)
-
     ctx.ensure_object(dict)
-    ctx.obj["container"] = container
+    ctx.obj["container"] = Container()
     ctx.obj["debug"] = debug
     ctx.obj["destination"] = destination
     ctx.obj["pipeline_name"] = pipeline_name

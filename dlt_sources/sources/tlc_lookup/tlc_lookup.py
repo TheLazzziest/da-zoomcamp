@@ -4,9 +4,11 @@ from collections.abc import Generator, Iterator
 from typing import Literal
 
 import dlt
-import httpx
 import pyarrow as pa
 from dlt.sources import DltResource
+
+from dlt_sources.core.http import build_client
+from dlt_sources.core.settings import get_settings
 
 from .schemas import ZoneLookupRecord
 
@@ -37,7 +39,10 @@ def factory(
     """
 
     def extract() -> Iterator[pa.RecordBatch]:
-        response = httpx.get(base_url, timeout=60)
+        with build_client(
+            base_url=base_url, timeout=get_settings().http.timeout
+        ) as client:
+            response = client.get(base_url)
         response.raise_for_status()
         reader = csv.DictReader(io.StringIO(response.text))
         rows: list[dict] = []

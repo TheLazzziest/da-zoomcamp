@@ -65,5 +65,49 @@ services:
       retries: 3
       start_period: 30s
 
+  # UI:     http://localhost:8081  (login admin / admin)
+  airflow:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BASE_IMAGE: apache/airflow:3.3.1-python3.13
+        RUN_USER: airflow
+    image: da-zoomcamp-airflow:local
+    profiles: ["airflow"]
+    # Airflow 3 defaults to the Simple auth manager, which ignores _AIRFLOW_WWW_USER_* envs.
+    # Seed a passwords file from the compose env so the UI login is deterministic.
+    command:
+      - bash
+      - -c
+      - |
+        printf '{"${AIRFLOW_USER:-admin}": "${AIRFLOW_PASSWORD:-admin}"}' > /opt/airflow/simple_auth_passwords.json
+        exec airflow standalone
+    ports:
+      - "8081:8080" # host 8081 (Trino keeps 8080)
+    environment:
+      AIRFLOW_UID: ${AIRFLOW_UID:-50000}
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS: ${AIRFLOW_USER:-admin}:Admin
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_PASSWORDS_FILE: /opt/airflow/simple_auth_passwords.json
+      # dlt source/destination configuration (env-first, see section A6)
+      GCP_PROJECT_ID: ${GCP_PROJECT_ID:-}
+      GCP_KEY_FILE: ${GCP_KEY_FILE:-}
+      GCS_BUCKET: ${GCS_BUCKET:-da-zoomcamp}
+      CH_HOST: ${CH_HOST:-clickhouse}
+      CH_HTTP_PORT: ${CH_HTTP_PORT:-8123}
+      CH_USER: ${CH_USER:-root}
+      CH_PASSWORD: ${CH_PASSWORD:-da-zoomcamp}
+      SOCRATA_APP_TOKEN: ${SOCRATA_APP_TOKEN:-}
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./.dlt:/opt/airflow/.dlt:ro
+      - airflow-home:/opt/airflow
+    restart: unless-stopped
+
 volumes:
   ch-data:
+  airflow-home:

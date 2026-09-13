@@ -3,10 +3,12 @@ from datetime import date as date_type
 from typing import Literal
 
 import dlt
-import httpx
 import pendulum
 import pyarrow as pa
 from dlt.sources import DltResource
+
+from dlt_sources.core.http import build_client
+from dlt_sources.core.settings import get_settings
 
 from .schemas import WeatherRecord
 
@@ -199,7 +201,9 @@ def factory(
     def observations(point: tuple[float, float]) -> list[dict]:
         if point not in cache:
             latitude, longitude = point
-            with httpx.Client(base_url=base_url) as client:
+            with build_client(
+                base_url=base_url, timeout=get_settings().http.timeout
+            ) as client:
                 response = client.get(
                     "/v1/archive",
                     params={
