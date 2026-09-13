@@ -55,8 +55,11 @@ def factory(
     def extract() -> Iterator[pa.RecordBatch]:
         rows: list[dict] = []
         last_key: str | None = None
+
         with httpx.Client(base_url=base_url, headers=headers, timeout=60) as client:
-            while True:
+
+            def fetch_page() -> list[dict]:
+                nonlocal last_key
                 response = client.get(
                     f"/{dataset_id}.json",
                     params={
@@ -72,28 +75,34 @@ def factory(
                 )
                 response.raise_for_status()
                 records = response.json()
-                if not records:
-                    break
+                if records:
+                    last_key = records[-1]["unique_key"]
+                return records
 
-                for record in records:
-                    rows.append(
-                        {
-                            field: (
-                                pendulum.parse(record[field])
-                                if field in DATE_FIELDS and record.get(field)
-                                else record.get(field)
-                            )
-                            for field in SELECT_FIELDS
-                        }
-                    )
+            previous_key: str | None = None
+            for records in iter(fetch_page, []):
+                rows.extend(
+                    {
+                        field: (
+                            pendulum.parse(record[field])
+                            if field in DATE_FIELDS and record.get(field)
+                            else record.get(field)
+                        )
+                        for field in SELECT_FIELDS
+                    }
+                    for record in records
+                )
 
                 if len(rows) >= chunk_size:
                     yield pa.RecordBatch.from_pylist(rows)
                     rows.clear()
 
-                if len(records) < page_size or records[-1]["unique_key"] == last_key:
+                if (
+                    len(records) < page_size
+                    or records[-1]["unique_key"] == previous_key
+                ):
                     break
-                last_key = records[-1]["unique_key"]
+                previous_key = records[-1]["unique_key"]
 
         if rows:
             yield pa.RecordBatch.from_pylist(rows)
@@ -101,7 +110,7 @@ def factory(
     yield dlt.resource(
         extract(),
         name="requests",
-        table_name="requests",
+        table_name="nyc311",
         primary_key=ServiceRequestRecord.primary_key(),
         columns=ServiceRequestRecord,
         write_disposition=write_disposition,
