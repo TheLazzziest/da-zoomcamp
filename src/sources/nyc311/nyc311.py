@@ -39,7 +39,7 @@ def factory(
         base_url (str): The Socrata resource base URL.
         dataset_id (str): The Socrata dataset id (defaults to the 2020-present 311 dataset).
         app_token (str): Optional Socrata app token to raise rate limits.
-        page_size (int): Number of rows fetched per API page.
+        page_size (int): Number of rows fetched per API page (keyset paginated on ``unique_key``).
         chunk_size (int): Arrow record-batch size (rows).
         write_disposition (Literal["append", "replace", "merge"]): The write disposition for the source.
     Returns:
@@ -54,17 +54,20 @@ def factory(
 
     def extract() -> Iterator[pa.RecordBatch]:
         rows: list[dict] = []
-        offset = 0
+        last_key: str | None = None
         with httpx.Client(base_url=base_url, headers=headers, timeout=60) as client:
             while True:
                 response = client.get(
                     f"/{dataset_id}.json",
                     params={
                         "$select": ",".join(SELECT_FIELDS),
-                        "$where": where,
+                        "$where": (
+                            where
+                            if last_key is None
+                            else f"{where} AND unique_key > '{last_key}'"
+                        ),
                         "$order": "unique_key",
                         "$limit": page_size,
-                        "$offset": offset,
                     },
                 )
                 response.raise_for_status()
@@ -88,9 +91,9 @@ def factory(
                     yield pa.RecordBatch.from_pylist(rows)
                     rows.clear()
 
-                offset += len(records)
-                if len(records) < page_size:
+                if len(records) < page_size or records[-1]["unique_key"] == last_key:
                     break
+                last_key = records[-1]["unique_key"]
 
         if rows:
             yield pa.RecordBatch.from_pylist(rows)
