@@ -14,7 +14,7 @@ add_dlt_id = true
 
 [destination.filesystem]
 staging_dataset_name_layout = "staging_%s"
-bucket_url = "s3://da-zoomcamp"
+bucket_url = "gs://da-zoomcamp"
 
 [destination.clickhouse]
 dataset_table_separator = "___"          # Separator for dataset table names from dataset.

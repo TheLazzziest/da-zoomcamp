@@ -23,23 +23,24 @@
 
     <storage_configuration>
         <disks>
-            <!-- S3 disk pointing to the MinIO service -->
-            <s3>
+            <!-- GCS disk (S3-compatible) for the cloud object store -->
+            <gcs>
                 <type>object_storage</type>
                 <object_storage_type>s3</object_storage_type>
                 <metadata_type>local</metadata_type>
-                <endpoint>http://da-zoomcamp.minio.local:9000</endpoint>
-                <access_key_id>root</access_key_id>
-                <secret_access_key>da-zoomcamp</secret_access_key>
-                <metadata_path>/var/lib/clickhouse/disks/s3/</metadata_path>
-            </s3>
-            <!-- Local cache for the S3 disk to improve performance -->
-            <s3_cache>
+                <endpoint replace="1" from_env="GCS_ENDPOINT">https://storage.googleapis.com/</endpoint>
+                <bucket replace="1" from_env="GCS_BUCKET">da-zoomcamp</bucket>
+                <access_key_id from_env="GCS_ACCESS_KEY_ID"/>
+                <secret_access_key from_env="GCS_SECRET_ACCESS_KEY"/>
+                <metadata_path>/var/lib/clickhouse/disks/gcs/</metadata_path>
+            </gcs>
+            <!-- Local cache for the GCS disk to improve performance -->
+            <gcs_cache>
                 <type>cache</type>
-                <disk>s3</disk>
-                <path>/var/lib/clickhouse/disks/s3_cache/</path>
+                <disk>gcs</disk>
+                <path>/var/lib/clickhouse/disks/gcs_cache/</path>
                 <max_size>10Gi</max_size>
-            </s3_cache>
+            </gcs_cache>
         </disks>
     </storage_configuration>
 

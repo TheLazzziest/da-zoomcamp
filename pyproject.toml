@@ -18,6 +18,48 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "loguru-mypy>=0.0.4",
+    "mypy>=1.13.0",
+    "ruff>=0.16.7",
+    "pytest>=8.3.0",
 ]
 development = ["ipykernel>=6.30.0", "ipython>=9.4.0", "jupytext>=1.17.2"]
+
+[tool.ruff]
+lint.select = ["E", "F", "I", "UP", "B", "SIM"]
+lint.ignore = ["E501"]
+target-version = "py313"
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+version = "0.1.0"
+version_files = ["pyproject.toml:version"]
+tag_format = "v$version"
+# allowed types (conventional-commits subset this repo uses)
+types = [
+    { type = "feat",     description = "A new feature",             bump = "MINOR" },
+    { type = "fix",      description = "A bug fix",                 bump = "PATCH" },
+    { type = "refactor", description = "A code change that neither fixes a bug nor adds a feature", bump = "PATCH" },
+    { type = "perf",     description = "A code change that improves performance", bump = "PATCH" },
+    { type = "chore",    description = "Build process or auxiliary tool changes", bump = false },
+    { type = "ci",       description = "Continuous integration changes", bump = false },
+    { type = "docs",     description = "Documentation only changes", bump = false },
+    { type = "style",    description = "Formatting, no production code change", bump = false },
+    { type = "test",     description = "Adding or correcting tests", bump = false },
+    { type = "build",    description = "Build system or external dependencies", bump = false },
+    { type = "revert",   description = "Revert a previous commit", bump = false },
+]
+# enforce convention
+update_changelog_on_bump = true
+allow_abort = false
+
+[tool.mypy]
+python_version = "3.13"
+strict = false
+exclude = ["tests/"]
+
+[[tool.mypy.overrides]]
+module = ["dlt", "dlt.*", "duckdb", "httpx", "pendulum", "pyarrow"]
+ignore_missing_imports = true

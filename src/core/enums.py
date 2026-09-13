@@ -5,3 +5,4 @@ class Destination(StrEnum):
     DUCKDB = "duckdb"
     CH = "clickhouse"
     S3 = "s3"
+    BIGQUERY = "bigquery"

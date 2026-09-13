@@ -15,8 +15,12 @@ def patching(record: loguru.Record):
 def configure(settings: ProjectSettings, /, purge_existing_settings: bool = True):
     global logger
 
-    configurations = {
-        "handlers": [
+    if purge_existing_settings:
+        logger.remove(0)
+
+    logger = logger.patch(patching)
+    logger.configure(
+        handlers=[
             {
                 "sink": sys.stdout,
                 "serialize": settings.is_production,
@@ -24,10 +28,5 @@ def configure(settings: ProjectSettings, /, purge_existing_settings: bool = True
                 "level": settings.logging.log_level,
             },
         ],
-        "extra": {},
-    }
-    if purge_existing_settings:
-        logger.remove(0)
-
-    logger = logger.patch(patching)
-    logger.configure(**configurations)
+        extra={},
+    )
