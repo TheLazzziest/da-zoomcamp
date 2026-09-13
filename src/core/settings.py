@@ -1,4 +1,4 @@
-from logging import _levelToName, getLevelName, INFO
+from logging import INFO, _levelToName, getLevelName
 from typing import Annotated
 
 from pydantic import Field, constr
@@ -18,7 +18,6 @@ class LoggingSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="logging")
 
 
-
 class ProjectSettings(BaseSettings):
     environment: str = Field(
         default="production", description="A environment which the project is run"
@@ -32,7 +31,7 @@ class ProjectSettings(BaseSettings):
         case_sensitive=False,
         extra="ignore",  # @TODO: Remove after stabilization
         nested_model_default_partial_update=True,
-        frozen=True
+        frozen=True,
     )
 
     @property
