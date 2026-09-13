@@ -18,7 +18,7 @@ repos:
         entry: .venv/bin/mypy
         require_serial: true
         pass_filenames: false
-        args: [--config-file, pyproject.toml, src/]
+        args: [--config-file, pyproject.toml, dlt_sources/]
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0

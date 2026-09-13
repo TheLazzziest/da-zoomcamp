@@ -2,10 +2,12 @@ from collections.abc import Generator, Iterator
 from typing import Literal
 
 import dlt
-import httpx
 import pendulum
 import pyarrow as pa
 from dlt.sources import DltResource
+
+from dlt_sources.core.http import build_client
+from dlt_sources.core.settings import get_settings
 
 from .schemas import ServiceRequestRecord
 
@@ -56,7 +58,9 @@ def factory(
         rows: list[dict] = []
         last_key: str | None = None
 
-        with httpx.Client(base_url=base_url, headers=headers, timeout=60) as client:
+        with build_client(
+            base_url=base_url, headers=headers, timeout=get_settings().http.timeout
+        ) as client:
 
             def fetch_page() -> list[dict]:
                 nonlocal last_key
