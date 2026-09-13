@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Literal
 
 import dlt
 import pendulum
@@ -10,9 +10,12 @@ from src.core.enums import Destination
 from src.core.loguru import configure
 from src.core.settings import ProjectSettings
 from src.sources.nyc.enums import NYCTripCategory
+from src.transformers.clickhouse import adapt_clickhouse
 
+run_pipeline_app = typer.Typer(
+    name="run", help="Run a pipeline for a specific data source."
+)
 
-run_pipeline_app = typer.Typer(name="run", help="Run a pipeline for a specific data source.")
 
 @run_pipeline_app.command(
     "nyc",
@@ -30,16 +33,22 @@ def run_nyc(
         pendulum.DateTime,
         typer.Argument(
             parser=pendulum.parse,
-            help="The start datetime for the data period (inclusive), in ISO 8601 format."
+            help="The start datetime for the data period (inclusive), in ISO 8601 format.",
         ),
-    ], 
+    ],
     end_datetime: Annotated[
         pendulum.DateTime | None,
         typer.Option(
             parser=pendulum.parse,
-            help="The end datetime for the data period (exclusive). If not provided, it defaults to the current time."
+            help="The end datetime for the data period (exclusive). If not provided, it defaults to the current time.",
         ),
-    ] = None, 
+    ] = None,
+    table_engine: Annotated[
+        Literal["merge_tree", "replicated_merge_tree"] | None,
+        typer.Option(
+            help="ClickHouse table engine. Applied only when destination is clickhouse."
+        ),
+    ] = None,
 ):
     """Runs the NYC taxi trip data ingestion pipeline."""
     container: Container = ctx.obj["container"]
@@ -51,9 +60,10 @@ def run_nyc(
         f"Running NYC pipeline for {period} and categories: {[c.value for c in categories]}"
     )
 
-    source = container.nyc_source(
-        categories=categories, period=period
-    )
+    source = container.nyc_source(categories=categories, period=period)
+
+    if table_engine and ctx.obj["destination"] is Destination.CH:
+        source = adapt_clickhouse(source, table_engine=table_engine)
 
     resources = source
 
@@ -79,12 +89,21 @@ app.add_typer(run_pipeline_app)
 def main(
     ctx: typer.Context,
     debug: Annotated[bool, typer.Option(help="Enable debug mode.")] = False,
-    destination: Annotated[Destination, typer.Option(help="A target storage for the ingested data")] = Destination.DUCKDB,
-    pipeline_name: Annotated[str | None, typer.Option(help="Name of the pipeline.")] = None,
-    dataset_name: Annotated[str | None, typer.Option(help="A target namespace where the ingested data will be put into. Defaults to the name of the source")] = None,
+    destination: Annotated[
+        Destination, typer.Option(help="A target storage for the ingested data")
+    ] = Destination.DUCKDB,
+    pipeline_name: Annotated[
+        str | None, typer.Option(help="Name of the pipeline.")
+    ] = None,
+    dataset_name: Annotated[
+        str | None,
+        typer.Option(
+            help="A target namespace where the ingested data will be put into. Defaults to the name of the source"
+        ),
+    ] = None,
     max_items: Annotated[
         int | None, typer.Option(help="Limit the number of items to process.")
-    ] = None
+    ] = None,
 ):
     settings = ProjectSettings()
     if settings.is_production:
@@ -92,7 +111,7 @@ def main(
 
     container = Container()
     container.config.from_pydantic(settings)
-    
+
     ctx.ensure_object(dict)
     ctx.obj["container"] = container
     ctx.obj["debug"] = debug
