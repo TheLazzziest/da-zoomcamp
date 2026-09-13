@@ -157,6 +157,63 @@ def run_weather(
 
 
 @run_pipeline_app.command(
+    "311",
+    help="Ingest NYC 311 service requests for a given period.",
+)
+def run_nyc311(
+    ctx: typer.Context,
+    start_datetime: Annotated[
+        pendulum.DateTime,
+        typer.Argument(
+            parser=pendulum.parse,
+            help="The start datetime for the created_date period (inclusive), in ISO 8601 format.",
+        ),
+    ],
+    end_datetime: Annotated[
+        pendulum.DateTime | None,
+        typer.Option(
+            parser=pendulum.parse,
+            help="The end datetime for the created_date period (exclusive). If not provided, it defaults to the current time.",
+        ),
+    ] = None,
+):
+    """Runs the NYC 311 service requests ingestion pipeline."""
+    container: Container = ctx.obj["container"]
+
+    end_datetime = end_datetime or pendulum.now(tz=pendulum.UTC).start_of("month")
+    period = pendulum.interval(start_datetime, end_datetime)
+
+    logger.info(f"Running NYC 311 pipeline for {period}")
+
+    source = container.nyc311_source(period=period)
+    _run(
+        _adapt(source, ctx),
+        ctx,
+        pipeline_name="nyc311_ingestion",
+        dataset_name="nyc311",
+    )
+
+
+@run_pipeline_app.command(
+    "zones",
+    help="Ingest the TLC taxi zone lookup dimension.",
+)
+def run_zones(ctx: typer.Context):
+    """Runs the TLC taxi zone lookup ingestion pipeline."""
+    container: Container = ctx.obj["container"]
+
+    logger.info("Running TLC taxi zone lookup pipeline")
+
+    source = container.tlc_lookup_source()
+    _run(
+        _adapt(source, ctx),
+        ctx,
+        pipeline_name="tlc_lookup_ingestion",
+        dataset_name="tlc_lookup",
+    )
+
+
+@run_pipeline_app.command(
     "calendar",
     help="Ingest calendar references (holidays, weekends, workdays) for a given period.",
 )
