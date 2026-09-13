@@ -8,3 +8,7 @@
 # ignore duckdb
 *.duckdb
 *.wal
+# ignore local editor/tooling cruft
+.vscode/
+.zed/
+speedscope.json
