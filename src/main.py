@@ -11,6 +11,7 @@ from src.core.loguru import configure
 from src.core.settings import ProjectSettings
 from src.sources.nyc.enums import NYCTripCategory
 from src.transformers.clickhouse import adapt_clickhouse
+from src.transformers.gcs import adapt_gcs
 
 run_pipeline_app = typer.Typer(
     name="run", help="Run a pipeline for a specific data source."
@@ -61,6 +62,9 @@ def run_nyc(
     )
 
     source = container.nyc_source(categories=categories, period=period)
+
+    if ctx.obj["destination"] is Destination.CH:
+        source = adapt_gcs(source)
 
     if table_engine and ctx.obj["destination"] is Destination.CH:
         source = adapt_clickhouse(source, table_engine=table_engine)
