@@ -1,8 +1,9 @@
-from typing import Annotated, Literal
+from typing import Annotated
 
 import dlt
 import pendulum
 import typer
+from dlt.sources import DltSource
 from loguru import logger
 
 from src.core.containers import Container
@@ -10,12 +11,48 @@ from src.core.enums import Destination
 from src.core.loguru import configure
 from src.core.settings import ProjectSettings
 from src.sources.nyc.enums import NYCTripCategory
-from src.transformers.clickhouse import adapt_clickhouse
+from src.transformers.clickhouse import TableEngine, adapt_clickhouse
 from src.transformers.gcs import adapt_gcs
 
 run_pipeline_app = typer.Typer(
     name="run", help="Run a pipeline for a specific data source."
 )
+
+
+def _adapt(source: DltSource, ctx: typer.Context) -> DltSource:
+    """Apply the destination-specific transformations to ``source``."""
+    destination = ctx.obj["destination"]
+    if destination is Destination.S3:
+        return adapt_gcs(source, table_format="iceberg")
+    if destination is Destination.CH:
+        return adapt_gcs(source)
+    return source
+
+
+def _run(
+    source: DltSource,
+    ctx: typer.Context,
+    *,
+    pipeline_name: str,
+    dataset_name: str,
+    table_engine: TableEngine | None = None,
+) -> None:
+    """Adapt ``source`` and load it into the configured destination."""
+    if table_engine and ctx.obj["destination"] is Destination.CH:
+        source = adapt_clickhouse(source, table_engine=table_engine)
+
+    if max_items := ctx.obj.get("max_items", None):
+        source = source.add_limit(max_items=max_items)
+
+    pipeline = dlt.pipeline(
+        pipeline_name=ctx.obj.get("pipeline_name") or pipeline_name,
+        destination=ctx.obj["destination"].value,
+        staging=("filesystem" if ctx.obj["destination"] is Destination.CH else None),
+        dataset_name=ctx.obj.get("dataset_name") or dataset_name,
+        dev_mode=ctx.obj.get("debug", False),
+    )
+    load_info = pipeline.run(source)
+    logger.info(load_info)
 
 
 @run_pipeline_app.command(
@@ -45,7 +82,7 @@ def run_nyc(
         ),
     ] = None,
     table_engine: Annotated[
-        Literal["merge_tree", "replicated_merge_tree"] | None,
+        TableEngine | None,
         typer.Option(
             help="ClickHouse table engine. Applied only when destination is clickhouse."
         ),
@@ -62,27 +99,119 @@ def run_nyc(
     )
 
     source = container.nyc_source(categories=categories, period=period)
-
-    if ctx.obj["destination"] is Destination.CH:
-        source = adapt_gcs(source)
-
-    if table_engine and ctx.obj["destination"] is Destination.CH:
-        source = adapt_clickhouse(source, table_engine=table_engine)
-
-    resources = source
-
-    if max_items := ctx.obj.get("max_items", None):
-        resources = resources.add_limit(max_items=max_items)
-
-    pipeline = dlt.pipeline(
-        pipeline_name=ctx.obj.get("pipeline_name", "nyc_trip_data_ingestion"),
-        destination=ctx.obj["destination"].value,
-        staging="filesystem",
-        dataset_name=ctx.obj.get("dataset_name", "nyc"),
-        dev_mode=ctx.obj.get("debug", False),
+    _run(
+        _adapt(source, ctx),
+        ctx,
+        pipeline_name="nyc_trip_data_ingestion",
+        dataset_name="nyc",
+        table_engine=table_engine,
     )
-    load_info = pipeline.run(resources)
-    logger.info(load_info)
+
+
+@run_pipeline_app.command(
+    "weather",
+    help="Ingest historical hourly weather observations for a given period.",
+)
+def run_weather(
+    ctx: typer.Context,
+    start_datetime: Annotated[
+        pendulum.DateTime,
+        typer.Argument(
+            parser=pendulum.parse,
+            help="The start datetime for the data period (inclusive), in ISO 8601 format.",
+        ),
+    ],
+    end_datetime: Annotated[
+        pendulum.DateTime | None,
+        typer.Option(
+            parser=pendulum.parse,
+            help="The end datetime for the data period (exclusive). If not provided, it defaults to the current time.",
+        ),
+    ] = None,
+    granularity: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--granularity",
+            "-g",
+            help="Temporal grain(s) to emit: hourly, daily, weekly, monthly. Repeatable.",
+        ),
+    ] = None,
+):
+    """Runs the weather observations ingestion pipeline."""
+    container: Container = ctx.obj["container"]
+
+    end_datetime = end_datetime or pendulum.now(tz=pendulum.UTC).start_of("month")
+    period = pendulum.interval(start_datetime, end_datetime)
+
+    logger.info(
+        f"Running weather pipeline for {period} and granularities: {granularity}"
+    )
+
+    source = container.weather_source(period=period, granularities=granularity)
+    _run(
+        _adapt(source, ctx),
+        ctx,
+        pipeline_name="weather_ingestion",
+        dataset_name="weather",
+    )
+
+
+@run_pipeline_app.command(
+    "calendar",
+    help="Ingest calendar references (holidays, weekends, workdays) for a given period.",
+)
+def run_calendar(
+    ctx: typer.Context,
+    start_datetime: Annotated[
+        pendulum.DateTime,
+        typer.Argument(
+            parser=pendulum.parse,
+            help="The start datetime for the data period (inclusive), in ISO 8601 format.",
+        ),
+    ],
+    end_datetime: Annotated[
+        pendulum.DateTime | None,
+        typer.Option(
+            parser=pendulum.parse,
+            help="The end datetime for the data period (exclusive). If not provided, it defaults to the current time.",
+        ),
+    ] = None,
+    calendar: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--calendar",
+            "-c",
+            help="ISO region code(s) resolved through the workalendar registry (e.g. US, US-NY). Repeatable.",
+        ),
+    ] = None,
+    granularity: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--granularity",
+            "-g",
+            help="Temporal grain(s) to emit: daily, weekly, monthly. Repeatable.",
+        ),
+    ] = None,
+):
+    """Runs the calendar reference ingestion pipeline."""
+    container: Container = ctx.obj["container"]
+
+    end_datetime = end_datetime or pendulum.now(tz=pendulum.UTC).start_of("month")
+    period = pendulum.interval(start_datetime, end_datetime)
+
+    logger.info(
+        f"Running calendar pipeline for {period}, calendars: {calendar}, granularities: {granularity}"
+    )
+
+    source = container.calendar_source(
+        period=period, calendars=calendar, granularities=granularity
+    )
+    _run(
+        _adapt(source, ctx),
+        ctx,
+        pipeline_name="calendar_ingestion",
+        dataset_name="calendar",
+    )
 
 
 app = typer.Typer(name="da-zoomcamp")

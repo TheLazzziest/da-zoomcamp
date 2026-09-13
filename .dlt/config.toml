@@ -8,6 +8,9 @@ dlthub_telemetry = true
 [sources.nyc]
 base_url = "https://d37ci6vzurychx.cloudfront.net/trip-data/"
 
+[sources.weather]
+base_url = "https://archive-api.open-meteo.com"
+
 [normalize.parquet_normalizer]
 add_dlt_load_id = true
 add_dlt_id = true
