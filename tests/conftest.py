@@ -46,14 +46,10 @@ def airflow_db():
 
 @pytest.fixture(scope="session", autouse=True)
 def dlt_profile(request):
-    """Activate the dlt run-context profile requested via ``--dlt-profile``."""
-    profile = request.config.getoption("--dlt-profile")
-    if not profile:
-        yield None
-        return
-
+    """Activate the dlt run-context profile requested via ``--dlt-profile`` (may be None)."""
     from dlt.common.runtime.run_context import switch_context, switched_run_context
 
+    profile = request.config.getoption("--dlt-profile")
     with switched_run_context(switch_context(run_dir=None, profile=profile)) as ctx:
         yield ctx
 
