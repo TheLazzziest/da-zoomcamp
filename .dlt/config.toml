@@ -11,6 +11,12 @@ base_url = "https://d37ci6vzurychx.cloudfront.net/trip-data/"
 [sources.weather]
 base_url = "https://archive-api.open-meteo.com"
 
+[sources.tlc_lookup]
+base_url = "https://d37ci6vzurychx.cloudfront.net/misc/taxi_zone_lookup.csv"
+
+[sources.nyc311]
+base_url = "https://data.cityofnewyork.us/resource"
+
 [normalize.parquet_normalizer]
 add_dlt_load_id = true
 add_dlt_id = true
